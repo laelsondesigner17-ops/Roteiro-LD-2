@@ -51,7 +51,11 @@ export default function App() {
   const [activeScriptByProject, setActiveScriptByProject] = useState<Record<string, string>>({});
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
-    return localStorage.getItem('roteiro-ld-theme') !== 'light';
+    try {
+      return localStorage.getItem('roteiro-ld-theme') !== 'light';
+    } catch {
+      return true;
+    }
   });
   const [showSidebarMobile, setShowSidebarMobile] = useState(false);
   const [showChatDesktop, setShowChatDesktop] = useState(true);
@@ -69,10 +73,13 @@ export default function App() {
     const root = document.documentElement;
     if (darkMode) {
       root.classList.add('dark');
-      localStorage.setItem('roteiro-ld-theme', 'dark');
     } else {
       root.classList.remove('dark');
-      localStorage.setItem('roteiro-ld-theme', 'light');
+    }
+    try {
+      localStorage.setItem('roteiro-ld-theme', darkMode ? 'dark' : 'light');
+    } catch {
+      // ignore storage restrictions
     }
   }, [darkMode]);
 
@@ -256,7 +263,7 @@ export default function App() {
           className="flex items-center gap-2.5 font-display text-lg font-bold tracking-tight text-slate-950 dark:text-white whitespace-nowrap shrink-0"
         >
           <img
-            src="/assets/aistudio/LD_LOGO_a27c8238.png"
+            src="./assets/aistudio/LD_LOGO_a27c8238.png"
             alt="Roteiro LD"
             className="w-8 h-8 rounded-lg object-contain shrink-0"
           />

@@ -38,7 +38,7 @@ export const PWAInstallButton: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <img
-                  src="/assets/aistudio/LD_LOGO_a27c8238.png"
+                  src="./assets/aistudio/LD_LOGO_a27c8238.png"
                   alt="Roteiro LD"
                   className="w-7 h-7 rounded-lg object-contain"
                 />
