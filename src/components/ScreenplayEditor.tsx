@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
   AudioLines,
+  Camera,
+  Clapperboard,
   Download,
   FilePlus2,
   Loader2,
@@ -10,7 +12,14 @@ import {
   Sparkles,
   Trash2,
   Wand2,
+  X,
 } from 'lucide-react';
+import {
+  SHOT_TYPE_EXAMPLES,
+  TRANSITION_TYPE_EXAMPLES,
+  type ShotTypeExample,
+  type TransitionTypeExample,
+} from '../lib/cinemaReferences';
 import {
   BLOCK_LABELS,
   type CharacterProfile,
@@ -74,6 +83,8 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
   onUpdateProjectStats,
 }) => {
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const [manualVisualGuide, setManualVisualGuide] = useState<'shot' | 'transition' | null>(null);
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [showDoctor, setShowDoctor] = useState(false);
   const [styleGoal, setStyleGoal] = useState('estruturar');
   const [doctorInstructions, setDoctorInstructions] = useState('');
@@ -152,11 +163,15 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
     updateBlocks(activeScript.blocks.map((b) => (b.id === id ? { ...b, type } : b)));
   };
 
-  const insertBlockAfter = (afterId: string | null, type: ScreenplayBlockType) => {
+  const insertBlockAfter = (
+    afterId: string | null,
+    type: ScreenplayBlockType,
+    initialContent = ''
+  ) => {
     const newBlock: ScreenplayBlock = {
       id: `blk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       type,
-      content: '',
+      content: initialContent,
     };
     if (!afterId) {
       updateBlocks([...activeScript.blocks, newBlock]);
@@ -167,6 +182,18 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
       updateBlocks(next);
     }
     setFocusedBlockId(newBlock.id);
+    if (type === 'shot' || type === 'transition') {
+      setManualVisualGuide(type);
+    } else {
+      setManualVisualGuide(null);
+    }
+    requestAnimationFrame(() => {
+      const el = textareaRefs.current[newBlock.id];
+      if (el) {
+        el.focus();
+        el.setSelectionRange(initialContent.length, initialContent.length);
+      }
+    });
   };
 
   const moveBlock = (id: string, dir: -1 | 1) => {
@@ -275,6 +302,12 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
   };
 
   const focusedBlock = activeScript.blocks.find((b) => b.id === focusedBlockId) || null;
+  const activeVisualGuide: 'shot' | 'transition' | null =
+    focusedBlock?.type === 'shot'
+      ? 'shot'
+      : focusedBlock?.type === 'transition'
+        ? 'transition'
+        : manualVisualGuide;
 
   const applyQuickChip = (chip: string, mode: 'prefix' | 'suffix' | 'replace') => {
     if (!focusedBlock) return;
@@ -288,6 +321,143 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
       nextVal = `${curr.replace(/\s*-\s*(DIA|NOITE|CREPÚSCULO|AMANHECER)$/i, '').trim()} ${chip}`.trim();
     }
     handleBlockChange(focusedBlock.id, nextVal);
+  };
+
+  const handleApplyShotExample = (shot: ShotTypeExample) => {
+    if (focusedBlock?.type === 'shot') {
+      const existingParts = focusedBlock.content.split('—');
+      const trailingDetail = existingParts.length > 1 ? existingParts.slice(1).join('—').trim() : '';
+      const nextVal = trailingDetail ? `${shot.insertText}${trailingDetail}` : shot.insertText;
+      handleBlockChange(focusedBlock.id, nextVal);
+      requestAnimationFrame(() => {
+        const el = textareaRefs.current[focusedBlock.id];
+        if (el) {
+          el.focus();
+          el.setSelectionRange(nextVal.length, nextVal.length);
+        }
+      });
+    } else {
+      insertBlockAfter(focusedBlockId, 'shot', shot.insertText);
+    }
+  };
+
+  const handleApplyTransitionExample = (transition: TransitionTypeExample) => {
+    if (focusedBlock?.type === 'transition') {
+      handleBlockChange(focusedBlock.id, transition.insertText);
+      requestAnimationFrame(() => {
+        const el = textareaRefs.current[focusedBlock.id];
+        if (el) {
+          el.focus();
+          el.setSelectionRange(transition.insertText.length, transition.insertText.length);
+        }
+      });
+    } else {
+      insertBlockAfter(focusedBlockId, 'transition', transition.insertText);
+    }
+  };
+
+  const renderTransitionPreview = (item: TransitionTypeExample) => {
+    switch (item.visualStyle) {
+      case 'cut':
+        return (
+          <div className="relative w-full h-full grid grid-cols-2 overflow-hidden">
+            <img src={item.fromImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <img src={item.toImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <div className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-white shadow" />
+          </div>
+        );
+      case 'fade_in':
+        return (
+          <div className="relative w-full h-full overflow-hidden bg-black">
+            <img src={item.toImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent" />
+          </div>
+        );
+      case 'fade_out':
+        return (
+          <div className="relative w-full h-full overflow-hidden bg-black">
+            <img src={item.fromImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/65 to-black" />
+          </div>
+        );
+      case 'dissolve':
+        return (
+          <div className="relative w-full h-full overflow-hidden">
+            <img src={item.fromImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <img
+              src={item.toImage}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="absolute inset-0 w-full h-full object-cover opacity-55 mix-blend-screen"
+            />
+          </div>
+        );
+      case 'match':
+        return (
+          <div className="relative w-full h-full grid grid-cols-2 overflow-hidden">
+            <img src={item.fromImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <img src={item.toImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-7 h-7 rounded-full border-2 border-white/90 shadow-sm" />
+            </div>
+          </div>
+        );
+      case 'smash':
+        return (
+          <div className="relative w-full h-full overflow-hidden">
+            <img src={item.fromImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <img
+              src={item.toImage}
+              alt=""
+              referrerPolicy="no-referrer"
+              style={{ clipPath: 'polygon(52% 0, 100% 0, 100% 100%, 42% 100%)' }}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div
+              style={{ clipPath: 'polygon(51% 0, 53% 0, 43% 100%, 41% 100%)' }}
+              className="absolute inset-0 bg-[#FF735E]"
+            />
+          </div>
+        );
+      case 'wipe':
+        return (
+          <div className="relative w-full h-full overflow-hidden">
+            <img src={item.fromImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <img
+              src={item.toImage}
+              alt=""
+              referrerPolicy="no-referrer"
+              style={{ clipPath: 'polygon(35% 0, 100% 0, 100% 100%, 65% 100%)' }}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          </div>
+        );
+      case 'iris':
+        return (
+          <div className="relative w-full h-full overflow-hidden bg-black">
+            <img src={item.fromImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <div
+              style={{
+                background:
+                  'radial-gradient(circle at center, transparent 28%, rgba(0,0,0,0.92) 48%, rgba(0,0,0,1) 100%)',
+              }}
+              className="absolute inset-0"
+            />
+          </div>
+        );
+      case 'audio_bridge':
+        return (
+          <div className="relative w-full h-full grid grid-cols-2 overflow-hidden">
+            <img src={item.fromImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <img src={item.toImage} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            <div className="absolute inset-x-2 bottom-2 h-2 rounded-sm bg-black/75 flex items-center gap-0.5 px-1.5">
+              <span className="h-1 flex-1 bg-[#7A92FF]" />
+              <span className="h-1.5 w-2 bg-[#7A92FF]" />
+              <span className="h-1 flex-1 bg-[#FF735E]" />
+            </div>
+          </div>
+        );
+    }
   };
 
   const handleTableReadTTS = async () => {
@@ -572,7 +742,7 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
       )}
 
       {/* Element Insertion Bar */}
-      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#141824] px-4 py-2.5 space-y-2">
+      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#141824] px-4 py-3 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">Inserir bloco:</span>
@@ -581,19 +751,50 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
                 key={type}
                 type="button"
                 onClick={() => insertBlockAfter(focusedBlockId, type)}
-                className="rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-200 hover:border-[#102EE0] hover:text-[#102EE0] dark:hover:border-[#4D6BFF] dark:hover:text-[#7A92FF] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  focusedBlock?.type === type
+                    ? 'border-[#102EE0] bg-[#102EE0]/10 text-[#102EE0] dark:border-[#4D6BFF] dark:bg-[#2E4EFF]/15 dark:text-[#8BA0FF]'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-[#102EE0] hover:text-[#102EE0] dark:hover:border-[#4D6BFF] dark:hover:text-[#7A92FF]'
+                }`}
               >
                 + {BLOCK_LABELS[type].split(' ')[0]}
               </button>
             ))}
           </div>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">
-            Tab alterna tipo · Enter cria próximo bloco
-          </span>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setManualVisualGuide((curr) => (curr === 'transition' ? null : 'transition'))}
+              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeVisualGuide === 'transition'
+                  ? 'border-[#102EE0] bg-[#102EE0]/10 text-[#102EE0] dark:border-[#4D6BFF] dark:text-[#8BA0FF]'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-[#102EE0]'
+              }`}
+            >
+              <Clapperboard className="w-3 h-3" />
+              Tipos de Transição
+            </button>
+            <button
+              type="button"
+              onClick={() => setManualVisualGuide((curr) => (curr === 'shot' ? null : 'shot'))}
+              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeVisualGuide === 'shot'
+                  ? 'border-[#D62308] bg-[#D62308]/10 text-[#D62308] dark:border-[#FF735E] dark:text-[#FF735E]'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-[#D62308]'
+              }`}
+            >
+              <Camera className="w-3 h-3" />
+              Tipos de Plano
+            </button>
+            <span className="hidden xl:inline text-[11px] text-slate-400 dark:text-slate-500">
+              Tab alterna tipo · Enter cria próximo
+            </span>
+          </div>
         </div>
 
         {focusedBlock?.type === 'scene_heading' && (
-          <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80">
             <span className="text-[11px] text-slate-400 mr-1">Atalhos de cena:</span>
             {['INT. ', 'EXT. ', 'INT./EXT. '].map((prefix) => (
               <button
@@ -619,7 +820,7 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
         )}
 
         {focusedBlock?.type === 'character' && knownCharacterNames.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80">
             <span className="text-[11px] text-slate-400 mr-1">Personagens:</span>
             {knownCharacterNames.map((name) => (
               <button
@@ -631,6 +832,141 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
                 {name}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Visual Shot Suggestions with Example Film Frames */}
+        {activeVisualGuide === 'shot' && (
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                  Sugestões de Plano / Enquadramento com Imagem de Exemplo
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {focusedBlock?.type === 'shot'
+                    ? 'Clique para aplicar o enquadramento no bloco Plano selecionado.'
+                    : 'Clique em um tipo para inserir um novo bloco Plano no roteiro.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setManualVisualGuide(null);
+                  if (focusedBlock?.type === 'shot') setFocusedBlockId(null);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                aria-label="Fechar sugestões de plano"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+              {SHOT_TYPE_EXAMPLES.map((shot) => {
+                const isSelected =
+                  focusedBlock?.type === 'shot' &&
+                  focusedBlock.content.toUpperCase().startsWith(shot.insertText.trim());
+                return (
+                  <button
+                    key={shot.id}
+                    type="button"
+                    onClick={() => handleApplyShotExample(shot)}
+                    className={`group text-left rounded-xl border overflow-hidden transition-colors cursor-pointer flex flex-col bg-slate-50 dark:bg-[#0B0E17] ${
+                      isSelected
+                        ? 'border-[#D62308] ring-1 ring-[#D62308]/40'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-[#102EE0] dark:hover:border-[#4D6BFF]'
+                    }`}
+                  >
+                    <div className="relative aspect-video w-full bg-slate-900 overflow-hidden">
+                      <img
+                        src={shot.imageUrl}
+                        alt={shot.label}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                      <span className="absolute bottom-1.5 left-2 right-2 text-[10px] font-medium text-slate-200 truncate">
+                        {shot.framingNote}
+                      </span>
+                    </div>
+                    <div className="p-2 space-y-0.5">
+                      <div className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 truncate">
+                        {shot.label}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-snug">
+                        {shot.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Visual Transition Suggestions with Example Previews */}
+        {activeVisualGuide === 'transition' && (
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                  Sugestões de Transição com Exemplo Visual
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {focusedBlock?.type === 'transition'
+                    ? 'Clique para aplicar a transição no bloco selecionado.'
+                    : 'Clique em uma transição para inserir no roteiro.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setManualVisualGuide(null);
+                  if (focusedBlock?.type === 'transition') setFocusedBlockId(null);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                aria-label="Fechar sugestões de transição"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+              {TRANSITION_TYPE_EXAMPLES.map((item) => {
+                const isSelected =
+                  focusedBlock?.type === 'transition' &&
+                  focusedBlock.content.trim().toUpperCase() === item.insertText.toUpperCase();
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleApplyTransitionExample(item)}
+                    className={`group text-left rounded-xl border overflow-hidden transition-colors cursor-pointer flex flex-col bg-slate-50 dark:bg-[#0B0E17] ${
+                      isSelected
+                        ? 'border-[#102EE0] ring-1 ring-[#102EE0]/40'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-[#102EE0] dark:hover:border-[#4D6BFF]'
+                    }`}
+                  >
+                    <div className="relative aspect-video w-full bg-slate-900 overflow-hidden">
+                      {renderTransitionPreview(item)}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+                      <span className="absolute bottom-1.5 left-2 text-[10px] font-screenplay font-bold text-white">
+                        {item.insertText}
+                      </span>
+                    </div>
+                    <div className="p-2.5 space-y-0.5">
+                      <div className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 truncate">
+                        {item.label}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-snug">
+                        {item.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -708,9 +1044,17 @@ export const ScreenplayEditor: React.FC<ScreenplayEditorProps> = ({
               </div>
 
               <textarea
+                ref={(el) => {
+                  textareaRefs.current[block.id] = el;
+                }}
                 rows={Math.max(1, Math.ceil((block.content.length || 1) / (block.type === 'dialogue' ? 42 : 64)))}
                 value={block.content}
-                onFocus={() => setFocusedBlockId(block.id)}
+                onFocus={() => {
+                  setFocusedBlockId(block.id);
+                  if (block.type === 'shot' || block.type === 'transition') {
+                    setManualVisualGuide(block.type);
+                  }
+                }}
                 onChange={(e) => handleBlockChange(block.id, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(e, block)}
                 placeholder={`Escreva ${BLOCK_LABELS[block.type].toLowerCase()}...`}

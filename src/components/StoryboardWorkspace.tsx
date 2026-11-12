@@ -1,17 +1,22 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Camera,
+  Check,
+  Clapperboard,
   Eraser,
   Film,
   ImagePlus,
+  Library,
   Loader2,
   PenTool,
   Plus,
   ScanEye,
+  Search,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
+import { FILM_STILL_BANK, type FilmStillReference } from '../lib/cinemaReferences';
 import type { ScriptDocument, StoryboardFrame } from '../types/studio';
 
 interface StoryboardWorkspaceProps {
@@ -22,6 +27,7 @@ interface StoryboardWorkspaceProps {
   frames: StoryboardFrame[];
   onSaveFrame: (frame: StoryboardFrame) => void;
   onDeleteFrame: (frameId: string) => void;
+  onInsertSceneToScript?: (still: FilmStillReference) => void;
 }
 
 const SHOT_SIZES = [
@@ -82,11 +88,19 @@ export const StoryboardWorkspace: React.FC<StoryboardWorkspaceProps> = ({
   frames,
   onSaveFrame,
   onDeleteFrame,
+  onInsertSceneToScript,
 }) => {
   const sortedFrames = [...frames].sort((a, b) => a.order - b.order);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [decoupling, setDecoupling] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  // Film Still Bank state
+  const [showFilmBank, setShowFilmBank] = useState(false);
+  const [targetFrameIdForBank, setTargetFrameIdForBank] = useState<string | null>(null);
+  const [bankCategory, setBankCategory] = useState<'Todos' | FilmStillReference['category']>('Todos');
+  const [bankQuery, setBankQuery] = useState('');
+  const [bankFeedback, setBankFeedback] = useState<string | null>(null);
 
   // Sketchpad modal state
   const [sketchFrame, setSketchFrame] = useState<StoryboardFrame | null>(null);
@@ -96,6 +110,91 @@ export const StoryboardWorkspace: React.FC<StoryboardWorkspaceProps> = ({
   const drawingRef = useRef(false);
 
   const totalDuration = sortedFrames.reduce((acc, f) => acc + (Number(f.durationSec) || 0), 0);
+
+  const bankCategories: Array<'Todos' | FilmStillReference['category']> = [
+    'Todos',
+    'Drama & Noir',
+    'Ficção Científica',
+    'Suspense',
+    'Ação',
+    'Detalhes & Inserts',
+  ];
+
+  const filteredStills = useMemo(() => {
+    const q = bankQuery.trim().toLowerCase();
+    return FILM_STILL_BANK.filter((item) => {
+      if (bankCategory !== 'Todos' && item.category !== bankCategory) return false;
+      if (!q) return true;
+      return (
+        item.title.toLowerCase().includes(q) ||
+        item.filmReference.toLowerCase().includes(q) ||
+        item.shotSize.toLowerCase().includes(q) ||
+        item.cameraMovement.toLowerCase().includes(q) ||
+        item.lens.toLowerCase().includes(q) ||
+        item.lightingNote.toLowerCase().includes(q) ||
+        item.sceneUsage.toLowerCase().includes(q)
+      );
+    });
+  }, [bankCategory, bankQuery]);
+
+  const targetFrameForBank = targetFrameIdForBank
+    ? sortedFrames.find((f) => f.id === targetFrameIdForBank) || null
+    : null;
+
+  const notifyBank = (msg: string) => {
+    setBankFeedback(msg);
+    setTimeout(() => {
+      setBankFeedback((curr) => (curr === msg ? null : curr));
+    }, 3500);
+  };
+
+  const handleUseStillAsNewFrame = (still: FilmStillReference) => {
+    const nextOrder = sortedFrames.length > 0 ? sortedFrames[sortedFrames.length - 1].order + 1 : 1;
+    onSaveFrame({
+      id: `frm_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      projectId,
+      ownerId,
+      order: nextOrder,
+      sceneTitle: `CENA ${nextOrder} — ${still.title.toUpperCase()}`,
+      shotSize: still.shotSize,
+      cameraMovement: still.cameraMovement,
+      lens: still.lens,
+      durationSec: 6,
+      action: still.sceneUsage,
+      dialogueCue: '',
+      audioNotes: '',
+      imageUrl: still.imageUrl,
+      aiAnalysis: `${still.filmReference}. ${still.lightingNote}`,
+    });
+    notifyBank(`Cena #${nextOrder} criada com "${still.title}".`);
+  };
+
+  const handleApplyStillToTargetFrame = (
+    still: FilmStillReference,
+    includeTechnicalSetup: boolean
+  ) => {
+    if (!targetFrameForBank) {
+      handleUseStillAsNewFrame(still);
+      return;
+    }
+    onSaveFrame({
+      ...targetFrameForBank,
+      imageUrl: still.imageUrl,
+      ...(includeTechnicalSetup
+        ? {
+            shotSize: still.shotSize,
+            cameraMovement: still.cameraMovement,
+            lens: still.lens,
+            action: targetFrameForBank.action || still.sceneUsage,
+            aiAnalysis: `${still.filmReference}. ${still.lightingNote}`,
+          }
+        : {
+            aiAnalysis: targetFrameForBank.aiAnalysis || `${still.filmReference}. ${still.lightingNote}`,
+          }),
+    });
+    notifyBank(`Referência "${still.title}" aplicada ao Plano #${targetFrameForBank.order}.`);
+    setTargetFrameIdForBank(null);
+  };
 
   const handleAddFrame = () => {
     const nextOrder = sortedFrames.length > 0 ? sortedFrames[sortedFrames.length - 1].order + 1 : 1;
@@ -297,6 +396,22 @@ export const StoryboardWorkspace: React.FC<StoryboardWorkspaceProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setTargetFrameIdForBank(null);
+              setShowFilmBank((v) => !v);
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              showFilmBank
+                ? 'border-[#102EE0] bg-[#102EE0]/10 text-[#102EE0] dark:border-[#4D6BFF] dark:bg-[#2E4EFF]/15 dark:text-[#8BA0FF]'
+                : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#0B0E17] text-slate-700 dark:text-slate-200 hover:border-[#102EE0]'
+            }`}
+          >
+            <Library className="w-4 h-4" />
+            Banco de Filmes ({FILM_STILL_BANK.length})
+          </button>
+
           {activeScript && activeScript.blocks.length > 0 && (
             <button
               type="button"
@@ -325,6 +440,198 @@ export const StoryboardWorkspace: React.FC<StoryboardWorkspaceProps> = ({
         </div>
       )}
 
+      {bankFeedback && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+          <Check className="w-4 h-4 shrink-0" />
+          <span>{bankFeedback}</span>
+        </div>
+      )}
+
+      {/* Cinema Film Still Reference Bank inside Storyboard */}
+      {showFilmBank && (
+        <section className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#141824] p-5 space-y-4 shadow-[0_1px_3px_rgba(12,15,24,0.04)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Banco de Capturas de Grandes Filmes
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Referências clássicas e contemporâneas de enquadramento, lente e iluminação para usar direto nas cenas do storyboard ou no roteiro.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowFilmBank(false);
+                setTargetFrameIdForBank(null);
+              }}
+              className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+              aria-label="Fechar banco de filmes"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {targetFrameForBank && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#102EE0]/30 bg-[#102EE0]/5 dark:bg-[#2E4EFF]/10 px-3.5 py-2.5 text-xs">
+              <span className="font-medium text-slate-800 dark:text-slate-200">
+                Aplicando referência no <strong className="text-[#102EE0] dark:text-[#8BA0FF]">Plano #{targetFrameForBank.order}</strong> ({targetFrameForBank.sceneTitle})
+              </span>
+              <button
+                type="button"
+                onClick={() => setTargetFrameIdForBank(null)}
+                className="text-xs font-semibold text-[#102EE0] dark:text-[#8BA0FF] hover:underline cursor-pointer"
+              >
+                Trocar para: Criar Nova Cena
+              </button>
+            </div>
+          )}
+
+          {/* Category Filter + Live Search */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-[#0B0E17]">
+              {bankCategories.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setBankCategory(cat)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    bankCategory === cat
+                      ? 'bg-white dark:bg-[#141824] text-slate-950 dark:text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative flex-1 min-w-[220px] max-w-xs">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={bankQuery}
+                onChange={(e) => setBankQuery(e.target.value)}
+                placeholder="Buscar filme, lente, plano ou luz..."
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#0B0E17] pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#102EE0]/40"
+              />
+            </div>
+          </div>
+
+          {filteredStills.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 py-10 text-center">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Nenhuma captura encontrada para os filtros atuais.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setBankCategory('Todos');
+                  setBankQuery('');
+                }}
+                className="mt-2 text-xs font-semibold text-[#102EE0] dark:text-[#8BA0FF] hover:underline cursor-pointer"
+              >
+                Limpar filtros
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[540px] overflow-y-auto pr-1">
+              {filteredStills.map((still) => (
+                <div
+                  key={still.id}
+                  className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50 dark:bg-[#0B0E17] overflow-hidden flex flex-col"
+                >
+                  <div className="relative aspect-video bg-slate-900 overflow-hidden">
+                    <img
+                      src={still.imageUrl}
+                      alt={`${still.title} — ${still.filmReference}`}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
+                    <div className="absolute bottom-2 left-2.5 right-2.5 text-[11px] font-medium text-white truncate">
+                      {still.filmReference}
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 space-y-2 flex-1 flex flex-col">
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                        {still.title}
+                      </h4>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                        <span>{still.category}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{still.shotSize}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{still.lens}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{still.cameraMovement}</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">Luz: </span>
+                      {still.lightingNote}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed flex-1">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Uso em cena: </span>
+                      {still.sceneUsage}
+                    </p>
+
+                    <div className="pt-2 flex flex-wrap items-center gap-2">
+                      {targetFrameForBank ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyStillToTargetFrame(still, true)}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#102EE0] hover:bg-[#0C24B8] dark:bg-[#2E4EFF] px-3 py-1.5 text-[11px] font-semibold text-white whitespace-nowrap cursor-pointer"
+                          >
+                            Aplicar no Plano #{targetFrameForBank.order}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyStillToTargetFrame(still, false)}
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 whitespace-nowrap cursor-pointer"
+                          >
+                            Só Imagem
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleUseStillAsNewFrame(still)}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#102EE0] hover:bg-[#0C24B8] dark:bg-[#2E4EFF] px-3 py-1.5 text-[11px] font-semibold text-white whitespace-nowrap cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Usar em Nova Cena
+                          </button>
+                          {onInsertSceneToScript && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onInsertSceneToScript(still);
+                                notifyBank(`Cena "${still.title}" adicionada ao roteiro.`);
+                              }}
+                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:border-[#D62308] hover:text-[#D62308] dark:hover:text-[#FF735E] whitespace-nowrap cursor-pointer"
+                              title="Inserir cabeçalho, plano e ação no roteiro ativo"
+                            >
+                              <Clapperboard className="w-3.5 h-3.5" />
+                              Ao Roteiro
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {sortedFrames.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 py-16 text-center bg-white/50 dark:bg-[#141824]/50">
           <Film className="w-8 h-8 text-slate-400 mx-auto mb-3" />
@@ -332,16 +639,29 @@ export const StoryboardWorkspace: React.FC<StoryboardWorkspaceProps> = ({
             Nenhum quadro de storyboard ainda
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Adicione planos, envie fotos de referência para análise com IA ou desenhe esboços rápidos.
+            Adicione planos, escolha referências no Banco de Filmes, envie fotos para análise com IA ou desenhe esboços rápidos.
           </p>
-          <button
-            type="button"
-            onClick={handleAddFrame}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#102EE0] hover:bg-[#0C24B8] dark:bg-[#2E4EFF] px-4 py-2 text-xs font-semibold text-white shadow-sm cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Adicionar Primeiro Quadro
-          </button>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleAddFrame}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#102EE0] hover:bg-[#0C24B8] dark:bg-[#2E4EFF] px-4 py-2 text-xs font-semibold text-white shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar Primeiro Quadro
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTargetFrameIdForBank(null);
+                setShowFilmBank(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#141824] px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-[#102EE0] cursor-pointer"
+            >
+              <Library className="w-4 h-4 text-[#102EE0] dark:text-[#8BA0FF]" />
+              Explorar Banco de Filmes
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -370,7 +690,19 @@ export const StoryboardWorkspace: React.FC<StoryboardWorkspaceProps> = ({
                   #{frame.order} · {frame.durationSec}s
                 </div>
 
-                <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5">
+                <div className="absolute bottom-2.5 right-2.5 flex flex-wrap items-center justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTargetFrameIdForBank(frame.id);
+                      setShowFilmBank(true);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-black/75 hover:bg-black/90 px-2.5 py-1.5 text-[11px] font-medium text-white cursor-pointer"
+                    title="Escolher captura no Banco de Filmes"
+                  >
+                    <Library className="w-3.5 h-3.5" />
+                    Banco
+                  </button>
                   <label className="inline-flex items-center gap-1 rounded-lg bg-black/75 hover:bg-black/90 px-2.5 py-1.5 text-[11px] font-medium text-white cursor-pointer">
                     <ImagePlus className="w-3.5 h-3.5" />
                     Foto
@@ -436,6 +768,9 @@ export const StoryboardWorkspace: React.FC<StoryboardWorkspaceProps> = ({
                     onChange={(e) => onSaveFrame({ ...frame, shotSize: e.target.value })}
                     className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#0B0E17] px-2.5 py-1.5 text-[11px] text-slate-800 dark:text-slate-200"
                   >
+                    {!SHOT_SIZES.includes(frame.shotSize) && frame.shotSize && (
+                      <option value={frame.shotSize}>{frame.shotSize}</option>
+                    )}
                     {SHOT_SIZES.map((s) => (
                       <option key={s} value={s}>
                         {s}
@@ -447,6 +782,9 @@ export const StoryboardWorkspace: React.FC<StoryboardWorkspaceProps> = ({
                     onChange={(e) => onSaveFrame({ ...frame, cameraMovement: e.target.value })}
                     className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#0B0E17] px-2.5 py-1.5 text-[11px] text-slate-800 dark:text-slate-200"
                   >
+                    {!CAMERA_MOVES.includes(frame.cameraMovement) && frame.cameraMovement && (
+                      <option value={frame.cameraMovement}>{frame.cameraMovement}</option>
+                    )}
                     {CAMERA_MOVES.map((m) => (
                       <option key={m} value={m}>
                         {m}

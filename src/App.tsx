@@ -400,6 +400,35 @@ export default function App() {
                   frames={projectFrames}
                   onSaveFrame={(f) => saveFrame(activeProject.id, f)}
                   onDeleteFrame={(fid) => deleteFrame(activeProject.id, fid)}
+                  onInsertSceneToScript={(still) => {
+                    if (!activeScript) return;
+                    const ts = Date.now();
+                    const newBlocks = [
+                      ...activeScript.blocks,
+                      {
+                        id: `blk_${ts}_1`,
+                        type: 'scene_heading' as const,
+                        content: `INT./EXT. ${still.title.toUpperCase()} - CENA`,
+                      },
+                      {
+                        id: `blk_${ts}_2`,
+                        type: 'shot' as const,
+                        content: `${still.shotSize.toUpperCase()} — ${still.cameraMovement} (${still.lens})`,
+                      },
+                      {
+                        id: `blk_${ts}_3`,
+                        type: 'action' as const,
+                        content: `${still.sceneUsage} Iluminação de referência: ${still.lightingNote} (${still.filmReference}).`,
+                      },
+                    ];
+                    saveScript(activeProject.id, {
+                      ...activeScript,
+                      blocks: newBlocks,
+                    });
+                    const sc = newBlocks.filter((b) => b.type === 'scene_heading').length;
+                    const pg = Math.max(1, Math.ceil(newBlocks.length / 18));
+                    updateProject(activeProject.id, { sceneCount: sc, pageCount: pg });
+                  }}
                 />
               )}
 
