@@ -5,24 +5,30 @@ import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
+  const rawBase = process.env.VITE_BASE_PATH?.trim();
+  const base = rawBase
+    ? rawBase.endsWith('/')
+      ? rawBase
+      : `${rawBase}/`
+    : './';
+
   return {
-    base: './',
+    base,
     plugins: [
       react(),
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.png', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
         manifest: {
-          id: './',
+          id: base,
           name: 'Roteiro LD',
           short_name: 'Roteiro LD',
           description: 'Estúdio profissional de roteirização, storyboard, storytelling e direção com IA e sincronização offline.',
           theme_color: '#102EE0',
           background_color: '#FFFFFF',
           display: 'standalone',
-          start_url: './',
-          scope: './',
+          start_url: base,
+          scope: base,
           icons: [
             {
               src: 'pwa-192x192.png',
@@ -46,6 +52,7 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,woff,woff2}'],
+          globIgnores: ['**/Captura_de_ecr__*'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           runtimeCaching: [
             {

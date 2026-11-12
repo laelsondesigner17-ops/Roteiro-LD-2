@@ -263,7 +263,7 @@ export default function App() {
           className="flex items-center gap-2.5 font-display text-lg font-bold tracking-tight text-slate-950 dark:text-white whitespace-nowrap shrink-0"
         >
           <img
-            src="./assets/aistudio/LD_LOGO_a27c8238.png"
+            src={`${import.meta.env.BASE_URL}assets/aistudio/LD_LOGO_a27c8238.png`}
             alt="Roteiro LD"
             className="w-8 h-8 rounded-lg object-contain shrink-0"
           />
