@@ -1,0 +1,6 @@
+{
+  "name": "Roteiro LD",
+  "description": "Estúdio profissional de roteirização, storyboard, storytelling e direção com IA, importação universal de mídia e salvamento local offline.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

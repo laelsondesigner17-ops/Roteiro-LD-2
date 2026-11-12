@@ -1,0 +1,194 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated writer or director profile.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 320 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "photoURL": { "type": "string", "maxLength": 1024 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "createdAt", "updatedAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Screenplay, storyboard, and storytelling production workspace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "logline": { "type": "string", "maxLength": 1200 },
+        "genre": { "type": "string", "maxLength": 80 },
+        "format": { "type": "string", "enum": ["longa", "curta", "serie", "documentario", "comercial", "youtube"] },
+        "author": { "type": "string", "maxLength": 120 },
+        "structureType": { "type": "string", "enum": ["three_act", "heros_journey", "save_the_cat", "story_circle"] },
+        "sceneCount": { "type": "integer" },
+        "pageCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "title", "format", "structureType", "sceneCount", "pageCount", "createdAt", "updatedAt"]
+    },
+    "ScriptDocument": {
+      "title": "ScriptDocument",
+      "description": "Individual screenplay or episode within a project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "episodeNumber": { "type": "integer" },
+        "synopsis": { "type": "string", "maxLength": 2000 },
+        "blocks": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "ownerId", "title", "episodeNumber", "blocks", "createdAt", "updatedAt"]
+    },
+    "StoryboardFrame": {
+      "title": "StoryboardFrame",
+      "description": "Visual shot card linked to a scene with framing, camera, and AI analysis.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "order": { "type": "integer" },
+        "sceneTitle": { "type": "string", "maxLength": 200 },
+        "shotSize": { "type": "string", "maxLength": 60 },
+        "cameraMovement": { "type": "string", "maxLength": 80 },
+        "lens": { "type": "string", "maxLength": 40 },
+        "durationSec": { "type": "number" },
+        "action": { "type": "string", "maxLength": 2000 },
+        "dialogueCue": { "type": "string", "maxLength": 1000 },
+        "audioNotes": { "type": "string", "maxLength": 1000 },
+        "imageUrl": { "type": "string", "maxLength": 350000 },
+        "aiAnalysis": { "type": "string", "maxLength": 4000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "ownerId", "order", "sceneTitle", "shotSize", "cameraMovement", "durationSec", "createdAt", "updatedAt"]
+    },
+    "StoryBeat": {
+      "title": "StoryBeat",
+      "description": "Narrative beat card in the storytelling structure planner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "order": { "type": "integer" },
+        "act": { "type": "string", "maxLength": 60 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "summary": { "type": "string", "maxLength": 2000 },
+        "emotionalArc": { "type": "string", "maxLength": 120 },
+        "linkedScene": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "ownerId", "order", "act", "title", "createdAt", "updatedAt"]
+    },
+    "CharacterProfile": {
+      "title": "CharacterProfile",
+      "description": "Character bible entry with voice profile for screenplay TTS.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "role": { "type": "string", "maxLength": 80 },
+        "archetype": { "type": "string", "maxLength": 80 },
+        "motivation": { "type": "string", "maxLength": 1000 },
+        "flaw": { "type": "string", "maxLength": 1000 },
+        "arc": { "type": "string", "maxLength": 1500 },
+        "voiceName": { "type": "string", "enum": ["Puck", "Charon", "Kore", "Fenrir", "Zephyr"] },
+        "voiceStyle": { "type": "string", "maxLength": 240 },
+        "imageUrl": { "type": "string", "maxLength": 350000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "ownerId", "name", "role", "voiceName", "createdAt", "updatedAt"]
+    },
+    "ImportedAsset": {
+      "title": "ImportedAsset",
+      "description": "Imported media or document metadata, AI category, transcription, and extracted text.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fileName": { "type": "string", "minLength": 1, "maxLength": 260 },
+        "mimeType": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "fileSize": { "type": "integer" },
+        "mediaKind": { "type": "string", "enum": ["video", "audio", "document", "image", "other"] },
+        "category": { "type": "string", "maxLength": 80 },
+        "tags": { "type": "array" },
+        "summary": { "type": "string", "maxLength": 4000 },
+        "transcription": { "type": "string", "maxLength": 120000 },
+        "extractedText": { "type": "string", "maxLength": 120000 },
+        "aiAnalysis": { "type": "string", "maxLength": 12000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "ownerId", "fileName", "mimeType", "fileSize", "mediaKind", "category", "tags", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Multi-turn AI director/writer assistant message within a project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "persona": { "type": "string", "maxLength": 80 },
+        "modelUsed": { "type": "string", "maxLength": 80 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 40000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "ownerId", "role", "content", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account metadata."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Top-level screenplay and storytelling projects owned by users."
+    },
+    "/projects/{projectId}/scripts/{scriptId}": {
+      "schema": { "$ref": "#/entities/ScriptDocument" },
+      "description": "Screenplay scripts and episodes inside a project."
+    },
+    "/projects/{projectId}/frames/{frameId}": {
+      "schema": { "$ref": "#/entities/StoryboardFrame" },
+      "description": "Storyboard visual frames inside a project."
+    },
+    "/projects/{projectId}/beats/{beatId}": {
+      "schema": { "$ref": "#/entities/StoryBeat" },
+      "description": "Storytelling structural beats inside a project."
+    },
+    "/projects/{projectId}/characters/{characterId}": {
+      "schema": { "$ref": "#/entities/CharacterProfile" },
+      "description": "Character bible profiles inside a project."
+    },
+    "/projects/{projectId}/assets/{assetId}": {
+      "schema": { "$ref": "#/entities/ImportedAsset" },
+      "description": "Imported media and document metadata, transcriptions, and AI analysis."
+    },
+    "/projects/{projectId}/chatMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Multi-turn AI assistant conversation history for a project."
+    }
+  }
+}

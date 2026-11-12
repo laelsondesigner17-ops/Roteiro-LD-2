@@ -1,0 +1,335 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Hardened Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isProjectOwner(projectId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/projects/$(projectId)) &&
+        get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidUser(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid == userId && data.uid == request.auth.uid &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 320 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        (!data.keys().hasAny(['photoURL']) || (data.photoURL is string && data.photoURL.size() <= 1024)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidProject(data, projectId) {
+      return data.keys().hasAll(['id', 'ownerId', 'title', 'format', 'structureType', 'sceneCount', 'pageCount', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'title', 'logline', 'genre', 'format', 'author', 'structureType', 'sceneCount', 'pageCount', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) && data.id == projectId &&
+        isValidId(data.ownerId) && data.ownerId == request.auth.uid &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        (!data.keys().hasAny(['logline']) || (data.logline is string && data.logline.size() <= 1200)) &&
+        (!data.keys().hasAny(['genre']) || (data.genre is string && data.genre.size() <= 80)) &&
+        data.format in ['longa', 'curta', 'serie', 'documentario', 'comercial', 'youtube'] &&
+        (!data.keys().hasAny(['author']) || (data.author is string && data.author.size() <= 120)) &&
+        data.structureType in ['three_act', 'heros_journey', 'save_the_cat', 'story_circle'] &&
+        data.sceneCount is int && data.sceneCount >= 0 && data.sceneCount <= 10000 &&
+        data.pageCount is int && data.pageCount >= 0 && data.pageCount <= 10000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidScript(data, projectId, scriptId) {
+      return data.keys().hasAll(['id', 'projectId', 'ownerId', 'title', 'episodeNumber', 'blocks', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'projectId', 'ownerId', 'title', 'episodeNumber', 'synopsis', 'blocks', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) && data.id == scriptId &&
+        isValidId(data.projectId) && data.projectId == projectId &&
+        isValidId(data.ownerId) && data.ownerId == request.auth.uid &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.episodeNumber is int && data.episodeNumber >= 1 && data.episodeNumber <= 999 &&
+        (!data.keys().hasAny(['synopsis']) || (data.synopsis is string && data.synopsis.size() <= 2000)) &&
+        data.blocks is list && data.blocks.size() <= 500 &&
+        (data.blocks.size() == 0 || (data.blocks[0] is map && data.blocks[0].type is string && data.blocks[0].content is string)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidFrame(data, projectId, frameId) {
+      return data.keys().hasAll(['id', 'projectId', 'ownerId', 'order', 'sceneTitle', 'shotSize', 'cameraMovement', 'durationSec', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'projectId', 'ownerId', 'order', 'sceneTitle', 'shotSize', 'cameraMovement', 'lens', 'durationSec', 'action', 'dialogueCue', 'audioNotes', 'imageUrl', 'aiAnalysis', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) && data.id == frameId &&
+        isValidId(data.projectId) && data.projectId == projectId &&
+        isValidId(data.ownerId) && data.ownerId == request.auth.uid &&
+        data.order is int && data.order >= 0 && data.order <= 5000 &&
+        data.sceneTitle is string && data.sceneTitle.size() <= 200 &&
+        data.shotSize is string && data.shotSize.size() <= 60 &&
+        data.cameraMovement is string && data.cameraMovement.size() <= 80 &&
+        (!data.keys().hasAny(['lens']) || (data.lens is string && data.lens.size() <= 40)) &&
+        (data.durationSec is int || data.durationSec is float) && data.durationSec >= 0 && data.durationSec <= 3600 &&
+        (!data.keys().hasAny(['action']) || (data.action is string && data.action.size() <= 2000)) &&
+        (!data.keys().hasAny(['dialogueCue']) || (data.dialogueCue is string && data.dialogueCue.size() <= 1000)) &&
+        (!data.keys().hasAny(['audioNotes']) || (data.audioNotes is string && data.audioNotes.size() <= 1000)) &&
+        (!data.keys().hasAny(['imageUrl']) || (data.imageUrl is string && data.imageUrl.size() <= 350000)) &&
+        (!data.keys().hasAny(['aiAnalysis']) || (data.aiAnalysis is string && data.aiAnalysis.size() <= 4000)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidBeat(data, projectId, beatId) {
+      return data.keys().hasAll(['id', 'projectId', 'ownerId', 'order', 'act', 'title', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'projectId', 'ownerId', 'order', 'act', 'title', 'summary', 'emotionalArc', 'linkedScene', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) && data.id == beatId &&
+        isValidId(data.projectId) && data.projectId == projectId &&
+        isValidId(data.ownerId) && data.ownerId == request.auth.uid &&
+        data.order is int && data.order >= 0 && data.order <= 500 &&
+        data.act is string && data.act.size() >= 1 && data.act.size() <= 60 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        (!data.keys().hasAny(['summary']) || (data.summary is string && data.summary.size() <= 2000)) &&
+        (!data.keys().hasAny(['emotionalArc']) || (data.emotionalArc is string && data.emotionalArc.size() <= 120)) &&
+        (!data.keys().hasAny(['linkedScene']) || (data.linkedScene is string && data.linkedScene.size() <= 160)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCharacter(data, projectId, charId) {
+      return data.keys().hasAll(['id', 'projectId', 'ownerId', 'name', 'role', 'voiceName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'projectId', 'ownerId', 'name', 'role', 'archetype', 'motivation', 'flaw', 'arc', 'voiceName', 'voiceStyle', 'imageUrl', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) && data.id == charId &&
+        isValidId(data.projectId) && data.projectId == projectId &&
+        isValidId(data.ownerId) && data.ownerId == request.auth.uid &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.role is string && data.role.size() <= 80 &&
+        (!data.keys().hasAny(['archetype']) || (data.archetype is string && data.archetype.size() <= 80)) &&
+        (!data.keys().hasAny(['motivation']) || (data.motivation is string && data.motivation.size() <= 1000)) &&
+        (!data.keys().hasAny(['flaw']) || (data.flaw is string && data.flaw.size() <= 1000)) &&
+        (!data.keys().hasAny(['arc']) || (data.arc is string && data.arc.size() <= 1500)) &&
+        data.voiceName in ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'] &&
+        (!data.keys().hasAny(['voiceStyle']) || (data.voiceStyle is string && data.voiceStyle.size() <= 240)) &&
+        (!data.keys().hasAny(['imageUrl']) || (data.imageUrl is string && data.imageUrl.size() <= 350000)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAsset(data, projectId, assetId) {
+      return data.keys().hasAll(['id', 'projectId', 'ownerId', 'fileName', 'mimeType', 'fileSize', 'mediaKind', 'category', 'tags', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'projectId', 'ownerId', 'fileName', 'mimeType', 'fileSize', 'mediaKind', 'category', 'tags', 'summary', 'transcription', 'extractedText', 'aiAnalysis', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) && data.id == assetId &&
+        isValidId(data.projectId) && data.projectId == projectId &&
+        isValidId(data.ownerId) && data.ownerId == request.auth.uid &&
+        data.fileName is string && data.fileName.size() >= 1 && data.fileName.size() <= 260 &&
+        data.mimeType is string && data.mimeType.size() >= 1 && data.mimeType.size() <= 120 &&
+        data.fileSize is int && data.fileSize >= 0 && data.fileSize <= 2147483647 &&
+        data.mediaKind in ['video', 'audio', 'document', 'image', 'other'] &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+        data.tags is list && data.tags.size() <= 20 &&
+        (data.tags.size() == 0 || data.tags[0] is string) &&
+        (!data.keys().hasAny(['summary']) || (data.summary is string && data.summary.size() <= 4000)) &&
+        (!data.keys().hasAny(['transcription']) || (data.transcription is string && data.transcription.size() <= 120000)) &&
+        (!data.keys().hasAny(['extractedText']) || (data.extractedText is string && data.extractedText.size() <= 120000)) &&
+        (!data.keys().hasAny(['aiAnalysis']) || (data.aiAnalysis is string && data.aiAnalysis.size() <= 12000)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidChatMessage(data, projectId, msgId) {
+      return data.keys().hasAll(['id', 'projectId', 'ownerId', 'role', 'content', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'projectId', 'ownerId', 'role', 'persona', 'modelUsed', 'content', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) && data.id == msgId &&
+        isValidId(data.projectId) && data.projectId == projectId &&
+        isValidId(data.ownerId) && data.ownerId == request.auth.uid &&
+        data.role in ['user', 'assistant'] &&
+        (!data.keys().hasAny(['persona']) || (data.persona is string && data.persona.size() <= 80)) &&
+        (!data.keys().hasAny(['modelUsed']) || (data.modelUsed is string && data.modelUsed.size() <= 80)) &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 40000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // 4. Collection Match Blocks
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
+        isValidUser(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
+        isValidUser(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'photoURL', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && isValidId(projectId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerified() && isValidId(projectId) &&
+        isValidProject(incoming(), projectId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(projectId) &&
+        existing().ownerId == request.auth.uid &&
+        isValidProject(incoming(), projectId) &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'logline', 'genre', 'format', 'author', 'structureType', 'sceneCount', 'pageCount', 'updatedAt']);
+      allow delete: if isVerified() && isValidId(projectId) && existing().ownerId == request.auth.uid;
+
+      match /scripts/{scriptId} {
+        allow get: if isSignedIn() && isValidId(projectId) && isValidId(scriptId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isVerified() && isValidId(projectId) && isValidId(scriptId) &&
+          isValidScript(incoming(), projectId, scriptId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId);
+        allow update: if isVerified() && isValidId(projectId) && isValidId(scriptId) &&
+          existing().ownerId == request.auth.uid &&
+          isValidScript(incoming(), projectId, scriptId) &&
+          incoming().id == existing().id &&
+          incoming().projectId == existing().projectId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'episodeNumber', 'synopsis', 'blocks', 'updatedAt']);
+        allow delete: if isVerified() && isValidId(projectId) && isValidId(scriptId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+      }
+
+      match /frames/{frameId} {
+        allow get: if isSignedIn() && isValidId(projectId) && isValidId(frameId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isVerified() && isValidId(projectId) && isValidId(frameId) &&
+          isValidFrame(incoming(), projectId, frameId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId);
+        allow update: if isVerified() && isValidId(projectId) && isValidId(frameId) &&
+          existing().ownerId == request.auth.uid &&
+          isValidFrame(incoming(), projectId, frameId) &&
+          incoming().id == existing().id &&
+          incoming().projectId == existing().projectId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['order', 'sceneTitle', 'shotSize', 'cameraMovement', 'lens', 'durationSec', 'action', 'dialogueCue', 'audioNotes', 'imageUrl', 'aiAnalysis', 'updatedAt']);
+        allow delete: if isVerified() && isValidId(projectId) && isValidId(frameId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+      }
+
+      match /beats/{beatId} {
+        allow get: if isSignedIn() && isValidId(projectId) && isValidId(beatId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isVerified() && isValidId(projectId) && isValidId(beatId) &&
+          isValidBeat(incoming(), projectId, beatId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId);
+        allow update: if isVerified() && isValidId(projectId) && isValidId(beatId) &&
+          existing().ownerId == request.auth.uid &&
+          isValidBeat(incoming(), projectId, beatId) &&
+          incoming().id == existing().id &&
+          incoming().projectId == existing().projectId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['order', 'act', 'title', 'summary', 'emotionalArc', 'linkedScene', 'updatedAt']);
+        allow delete: if isVerified() && isValidId(projectId) && isValidId(beatId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+      }
+
+      match /characters/{charId} {
+        allow get: if isSignedIn() && isValidId(projectId) && isValidId(charId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isVerified() && isValidId(projectId) && isValidId(charId) &&
+          isValidCharacter(incoming(), projectId, charId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId);
+        allow update: if isVerified() && isValidId(projectId) && isValidId(charId) &&
+          existing().ownerId == request.auth.uid &&
+          isValidCharacter(incoming(), projectId, charId) &&
+          incoming().id == existing().id &&
+          incoming().projectId == existing().projectId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'role', 'archetype', 'motivation', 'flaw', 'arc', 'voiceName', 'voiceStyle', 'imageUrl', 'updatedAt']);
+        allow delete: if isVerified() && isValidId(projectId) && isValidId(charId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+      }
+
+      match /assets/{assetId} {
+        allow get: if isSignedIn() && isValidId(projectId) && isValidId(assetId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isVerified() && isValidId(projectId) && isValidId(assetId) &&
+          isValidAsset(incoming(), projectId, assetId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId);
+        allow update: if isVerified() && isValidId(projectId) && isValidId(assetId) &&
+          existing().ownerId == request.auth.uid &&
+          isValidAsset(incoming(), projectId, assetId) &&
+          incoming().id == existing().id &&
+          incoming().projectId == existing().projectId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['fileName', 'category', 'tags', 'summary', 'transcription', 'extractedText', 'aiAnalysis', 'updatedAt']);
+        allow delete: if isVerified() && isValidId(projectId) && isValidId(assetId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+      }
+
+      match /chatMessages/{messageId} {
+        allow get: if isSignedIn() && isValidId(projectId) && isValidId(messageId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isVerified() && isValidId(projectId) && isValidId(messageId) &&
+          isValidChatMessage(incoming(), projectId, messageId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isProjectOwner(projectId);
+        allow update: if false;
+        allow delete: if isVerified() && isValidId(projectId) && isValidId(messageId) &&
+          existing().ownerId == request.auth.uid && isProjectOwner(projectId);
+      }
+    }
+  }
+}
